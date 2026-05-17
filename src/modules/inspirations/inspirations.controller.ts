@@ -21,7 +21,7 @@ export const inspirationsController = {
 
   async remove(req: Request, res: Response, next: NextFunction) {
     try {
-      await inspirationsService.deleteInspiration(req.user!.id, req.params.id)
+      await inspirationsService.deleteInspiration(req.user!.id, req.params.id as string)
       res.json({ success: true, data: { message: 'Deleted' } })
     } catch (e) { next(e) }
   },

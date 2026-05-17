@@ -32,7 +32,7 @@ export const authService = {
     const token = jwt.sign(
       { id: 'admin', email, role: 'admin' },
       env.JWT_SECRET,
-      { expiresIn: env.JWT_EXPIRES_IN }
+      { expiresIn: env.JWT_EXPIRES_IN as any }
     )
 
     logger.info('Admin logged in', { email })
@@ -62,7 +62,7 @@ export const authService = {
     const token = jwt.sign(
       { id: user.id, email, role: 'user' },
       env.JWT_SECRET,
-      { expiresIn: env.JWT_EXPIRES_IN }
+      { expiresIn: env.JWT_EXPIRES_IN as any }
     )
 
     logger.info('User registered', { userId: user.id, email })
@@ -90,7 +90,7 @@ export const authService = {
     const token = jwt.sign(
       { id: user.id, email, role: 'user' },
       env.JWT_SECRET,
-      { expiresIn: env.JWT_EXPIRES_IN }
+      { expiresIn: env.JWT_EXPIRES_IN as any }
     )
 
     logger.info('User logged in', { userId: user.id, email })
