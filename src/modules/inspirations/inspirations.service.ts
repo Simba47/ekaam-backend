@@ -9,6 +9,7 @@ const MONTHLY_LIMITS = { accounts: 3, videos: 10 }
 
 export const inspirationsService = {
   async getMonthlyUsage(userId: string) {
+    if (userId === 'admin') return { accountsAdded: 0, videosAdded: 0, accountsLimit: 0, videosLimit: 0, accountsLeft: 0, videosLeft: 0 }
     const month = new Date().toISOString().slice(0, 7)
     const sources = await db.query.inspirationSources.findMany({
       where: and(eq(inspirationSources.userId, userId), eq(inspirationSources.addedMonth, month)),
@@ -25,6 +26,7 @@ export const inspirationsService = {
   },
 
   async addInspiration(userId: string, url: string) {
+    if (userId === 'admin') throw createError('Admin cannot add inspirations', 403)
     const month = new Date().toISOString().slice(0, 7)
     const usage = await this.getMonthlyUsage(userId)
 
@@ -49,6 +51,7 @@ export const inspirationsService = {
   },
 
   async listInspirations(userId: string) {
+    if (userId === 'admin') return []
     const inspirations = await db.query.inspirationSources.findMany({
       where: eq(inspirationSources.userId, userId),
       orderBy: (t, { desc }) => [desc(t.createdAt)],
