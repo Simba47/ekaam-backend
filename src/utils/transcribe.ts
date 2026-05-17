@@ -303,49 +303,39 @@ export const polishWithSarvam = async (
   }
 }
 
-const buildApifyProxy = (): string | undefined => {
-  if (!env.APIFY_API_TOKEN) return undefined
-  // Apify proxy: username is "auto", password is the API token
-  return `http://auto:${env.APIFY_API_TOKEN}@proxy.apify.com:8000`
-}
-
-const downloadAudio = async (url: string, tmpBase: string): Promise<void> => {
-  const apifyProxy = buildApifyProxy()
-
-  const ytdlpOptions: Record<string, unknown> = {
-    extractAudio: true,
-    audioFormat: 'mp3',
-    audioQuality: 5,
-    output: `${tmpBase}.%(ext)s`,
-    noPlaylist: true,
-    quiet: true,
-    noWarnings: true,
-    noCheckCertificate: true,
-  }
-
-  // Try with Apify residential proxy first (bypasses YouTube bot detection)
-  if (apifyProxy) {
-    try {
-      logger.info('Downloading audio via Apify residential proxy', { url })
-      await Promise.race([
-        ytDlpExec(url, { ...ytdlpOptions, proxy: apifyProxy }),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('yt-dlp timed out after 120s')), 120_000)
-        ),
-      ])
-      return
-    } catch (err) {
-      logger.warn('yt-dlp with Apify proxy failed, trying direct', { error: (err as Error).message })
-    }
-  }
-
-  // Fallback: direct download (may fail on cloud IPs)
+const downloadAudioDirect = async (url: string, tmpBase: string): Promise<void> => {
   await Promise.race([
-    ytDlpExec(url, ytdlpOptions),
+    ytDlpExec(url, {
+      extractAudio: true,
+      audioFormat: 'mp3',
+      audioQuality: 5,
+      output: `${tmpBase}.%(ext)s`,
+      noPlaylist: true,
+      quiet: true,
+      noWarnings: true,
+      noCheckCertificate: true,
+    }),
     new Promise<never>((_, reject) =>
       setTimeout(() => reject(new Error('yt-dlp timed out after 90s')), 90_000)
     ),
   ])
+}
+
+// Get transcript via Apify YouTube scraper (runs on Apify infra with residential proxies)
+const getTranscriptViaApify = async (url: string): Promise<string | null> => {
+  if (!env.APIFY_API_TOKEN) return null
+  try {
+    const { scrapeYouTubeCaptions } = await import('../services/apify.service')
+    logger.info('Fetching transcript via Apify YouTube scraper', { url })
+    const result = await scrapeYouTubeCaptions(url)
+    if (result.captions) {
+      logger.info('Apify transcript fetched', { chars: result.captions.length })
+      return result.captions
+    }
+  } catch (err) {
+    logger.warn('Apify transcript fetch failed', { error: (err as Error).message })
+  }
+  return null
 }
 
 export const downloadAndTranscribe = async (
@@ -358,7 +348,7 @@ export const downloadAndTranscribe = async (
 
   try {
     logger.info('Downloading audio', { url })
-    await downloadAudio(url, tmpBase)
+    await downloadAudioDirect(url, tmpBase)
 
     if (!fs.existsSync(audioPath)) {
       logger.warn('Audio file not created', { audioPath })
@@ -380,7 +370,9 @@ export const downloadAndTranscribe = async (
 
     return { transcript: null, confidence: 'low' }
   } catch (error) {
-    logger.error('Audio download/transcription failed', { error: (error as Error).message })
+    logger.warn('Audio download failed, trying Apify transcript', { error: (error as Error).message })
+    const apifyTranscript = await getTranscriptViaApify(url)
+    if (apifyTranscript) return { transcript: apifyTranscript, confidence: 'low' }
     return { transcript: null, confidence: 'low' }
   } finally {
     if (fs.existsSync(audioPath)) {
