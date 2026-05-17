@@ -1,5 +1,4 @@
 import axios from 'axios'
-import { YoutubeTranscript } from 'youtube-transcript'
 import { env } from '../config/env'
 import { logger } from './logger'
 import { scrapeYouTubeCaptions, withApifyRetry } from '../services/apify.service'
@@ -179,6 +178,7 @@ export const getVideoCaptions = async (videoId: string): Promise<CaptionTrack[]>
 export const fetchTranscript = async (videoId: string): Promise<string | null> => {
   // Method 1: youtube-transcript library (most reliable)
   try {
+    const { YoutubeTranscript } = await import('youtube-transcript')
     const tracks = await YoutubeTranscript.fetchTranscript(videoId)
     if (tracks && tracks.length > 0) {
       const text = tracks.map((t) => t.text).join(' ').trim()
