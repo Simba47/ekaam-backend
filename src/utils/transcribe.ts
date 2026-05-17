@@ -303,6 +303,50 @@ export const polishWithSarvam = async (
   }
 }
 
+const buildApifyProxy = (): string | undefined => {
+  if (!env.APIFY_API_TOKEN) return undefined
+  return `http://groups-RESIDENTIAL,country-IN:${env.APIFY_API_TOKEN}@proxy.apify.com:8000`
+}
+
+const downloadAudio = async (url: string, tmpBase: string): Promise<void> => {
+  const apifyProxy = buildApifyProxy()
+
+  const ytdlpOptions: Record<string, unknown> = {
+    extractAudio: true,
+    audioFormat: 'mp3',
+    audioQuality: 5,
+    output: `${tmpBase}.%(ext)s`,
+    noPlaylist: true,
+    quiet: true,
+    noWarnings: true,
+    noCheckCertificate: true,
+  }
+
+  // Try with Apify residential proxy first (bypasses YouTube bot detection)
+  if (apifyProxy) {
+    try {
+      logger.info('Downloading audio via Apify residential proxy', { url })
+      await Promise.race([
+        ytDlpExec(url, { ...ytdlpOptions, proxy: apifyProxy }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('yt-dlp timed out after 120s')), 120_000)
+        ),
+      ])
+      return
+    } catch (err) {
+      logger.warn('yt-dlp with Apify proxy failed, trying direct', { error: (err as Error).message })
+    }
+  }
+
+  // Fallback: direct download (may fail on cloud IPs)
+  await Promise.race([
+    ytDlpExec(url, ytdlpOptions),
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('yt-dlp timed out after 90s')), 90_000)
+    ),
+  ])
+}
+
 export const downloadAndTranscribe = async (
   url: string,
   languageHint?: string
@@ -313,22 +357,7 @@ export const downloadAndTranscribe = async (
 
   try {
     logger.info('Downloading audio', { url })
-
-    await Promise.race([
-      ytDlpExec(url, {
-        extractAudio: true,
-        audioFormat: 'mp3',
-        audioQuality: 5,
-        output: `${tmpBase}.%(ext)s`,
-        noPlaylist: true,
-        quiet: true,
-        noWarnings: true,
-        noCheckCertificate: true,
-      }),
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('yt-dlp timed out after 90s')), 90_000)
-      ),
-    ])
+    await downloadAudio(url, tmpBase)
 
     if (!fs.existsSync(audioPath)) {
       logger.warn('Audio file not created', { audioPath })
