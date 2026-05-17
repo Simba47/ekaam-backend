@@ -20,6 +20,7 @@ const envSchema = z.object({
   SARVAM_API_KEY: z.string().optional(),
   YOUTUBE_API_KEY: z.string().min(1, 'YOUTUBE_API_KEY is required'),
   APIFY_API_TOKEN: z.string().optional(),
+  APIFY_PROXY_PASSWORD: z.string().optional(),
   INSTAGRAM_APP_ID: z.string().optional(),
   INSTAGRAM_APP_SECRET: z.string().optional(),
   INSTAGRAM_REDIRECT_URI: z.string().optional(),
