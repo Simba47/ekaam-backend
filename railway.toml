@@ -2,6 +2,9 @@
 builder = "nixpacks"
 buildCommand = "npm install && npm run build"
 
+[build.nixpacksPlan.phases.setup]
+nixPkgs = ["nodejs_18", "python3", "yt-dlp"]
+
 [deploy]
 startCommand = "npm start"
 healthcheckPath = "/health"
