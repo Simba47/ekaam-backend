@@ -22,8 +22,21 @@ const app = express()
 app.use(helmet())
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
+const allowedOrigins = [
+  env.FRONTEND_ADMIN_URL,
+  env.FRONTEND_CLIENT_URL,
+  'http://localhost:5173',
+  'http://localhost:5174',
+]
+
 app.use(cors({
-  origin: [env.FRONTEND_ADMIN_URL, env.FRONTEND_CLIENT_URL, 'http://localhost:5173', 'http://localhost:5174'],
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true)
+    const isAllowed =
+      allowedOrigins.includes(origin) ||
+      /^https:\/\/ekaam-(client-portal|admin)[\w-]*\.vercel\.app$/.test(origin)
+    callback(null, isAllowed)
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
