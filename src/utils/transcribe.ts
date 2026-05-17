@@ -305,7 +305,8 @@ export const polishWithSarvam = async (
 
 const buildApifyProxy = (): string | undefined => {
   if (!env.APIFY_API_TOKEN) return undefined
-  return `http://groups-RESIDENTIAL,country-IN:${env.APIFY_API_TOKEN}@proxy.apify.com:8000`
+  // Apify proxy: username is "auto", password is the API token
+  return `http://auto:${env.APIFY_API_TOKEN}@proxy.apify.com:8000`
 }
 
 const downloadAudio = async (url: string, tmpBase: string): Promise<void> => {
