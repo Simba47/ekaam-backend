@@ -9,7 +9,6 @@ import {
   getAllPlaylistVideos,
   getVideoDetails,
   getBatchVideoDetails,
-  fetchTranscript,
   parseISO8601Duration,
   splitTranscript,
   extractChannelIdFromUrl,
@@ -431,11 +430,8 @@ export const scraperAgent = {
     let fullTranscript: string | null = audioResult.transcript
     let transcriptConfidence: 'high' | 'low' = audioResult.confidence
 
-    // Step 2: Sarvam/audio failed — fall back to YouTube captions
     if (!fullTranscript) {
-      logger.info('Audio transcription failed, falling back to YouTube captions', { videoId })
-      fullTranscript = await fetchTranscript(videoId)
-      transcriptConfidence = 'low'
+      logger.info('Audio transcription failed — no transcript available', { videoId })
     }
 
     let hookText: string | null = null
