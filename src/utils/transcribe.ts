@@ -11,7 +11,7 @@ import { logger } from './logger'
 
 const CHUNK_DURATION_SECONDS = 25  // Sarvam starter plan limit is 30s — 25s + 5s overlap = 30s max
 const OVERLAP_SECONDS = 5
-const CHUNK_DELAY_MS = 2000
+const CHUNK_DELAY_MS = 6000
 
 export interface TranscribeResult {
   transcript: string | null

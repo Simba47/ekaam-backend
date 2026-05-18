@@ -134,7 +134,7 @@ export const scraperAgent = {
       // Small delay every 5 videos to avoid yt-dlp getting rate-limited by YouTube
       if (i > 0 && i % 5 === 0) {
         logger.info(`Processed ${i}/${videoIds.length} videos — brief pause before continuing`, { sourceId })
-        await new Promise(resolve => setTimeout(resolve, 2000))
+        await new Promise(resolve => setTimeout(resolve, 5000))
       }
       try {
         const hasTranscript = await this.processVideo(sourceId, videoId)
