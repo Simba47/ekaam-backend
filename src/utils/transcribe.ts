@@ -317,7 +317,7 @@ const downloadAudio = async (url: string, tmpBase: string): Promise<void> => {
       noCheckCertificate: true,
       extractorArgs: 'youtube:player_client=tv_embedded,web',
       sleepInterval: 2,
-    }),
+    } as any),
     new Promise<never>((_, reject) =>
       setTimeout(() => reject(new Error('yt-dlp timed out after 120s')), 120_000)
     ),
