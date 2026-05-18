@@ -314,13 +314,14 @@ const writeCookiesFile = (): string | null => {
   } catch { return null }
 }
 
-const runYtDlp = (url: string, opts: Record<string, unknown>): Promise<void> =>
-  Promise.race([
+const runYtDlp = async (url: string, opts: Record<string, unknown>): Promise<void> => {
+  await Promise.race([
     ytDlpExec(url, opts as any),
     new Promise<never>((_, reject) =>
       setTimeout(() => reject(new Error('yt-dlp timed out after 120s')), 120_000)
     ),
   ])
+}
 
 const downloadAudio = async (url: string, tmpBase: string): Promise<void> => {
   const baseOpts: Record<string, unknown> = {
