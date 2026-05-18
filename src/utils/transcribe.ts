@@ -315,7 +315,7 @@ const downloadAudio = async (url: string, tmpBase: string): Promise<void> => {
       quiet: true,
       noWarnings: true,
       noCheckCertificate: true,
-      extractorArgs: 'youtube:player_client=tv_embedded,web',
+      extractorArgs: 'youtube:player_client=android,tv_embedded',
       sleepInterval: 2,
     } as any),
     new Promise<never>((_, reject) =>
