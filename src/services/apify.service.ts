@@ -269,6 +269,38 @@ export async function scrapeYouTubeVideos(
   })
 }
 
+export async function getYouTubeStreamUrl(videoUrl: string): Promise<string | null> {
+  const client = getClient()
+
+  logger.info('Getting YouTube stream URL via Apify', { videoUrl })
+
+  const run = await client.actor('streamers/youtube-scraper').call({
+    startUrls: [{ url: videoUrl }],
+    proxy: PROXY_CONFIG,
+    downloadVideos: false,
+    downloadSubtitles: false,
+    saveSubtitles: false,
+  })
+
+  const { items } = await client.dataset(run.defaultDatasetId).listItems()
+  if (!items || items.length === 0) return null
+
+  const item = items[0] as Record<string, unknown>
+  // Prefer direct stream URL over YouTube watch URL
+  const streamUrl = (item.streamUrl as string)
+    ?? (item.videoUrl as string)
+    ?? (item.directUrl as string)
+    ?? null
+
+  if (streamUrl && !streamUrl.includes('youtube.com') && !streamUrl.includes('youtu.be')) {
+    logger.info('Got direct stream URL from Apify', { streamUrl: streamUrl.slice(0, 80) })
+    return streamUrl
+  }
+
+  logger.warn('Apify did not return a direct stream URL', { url: videoUrl })
+  return null
+}
+
 export async function scrapeYouTubeCaptions(
   videoUrl: string,
   preferredLanguage = 'en'
