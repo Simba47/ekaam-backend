@@ -307,7 +307,9 @@ const writeCookiesFile = (): string | null => {
   if (!env.YOUTUBE_COOKIES) return null
   const cookiePath = path.join(os.tmpdir(), 'yt_cookies.txt')
   try {
-    fs.writeFileSync(cookiePath, env.YOUTUBE_COOKIES, 'utf8')
+    // Railway encodes multi-line env vars with literal \n — restore real newlines
+    const content = env.YOUTUBE_COOKIES.replace(/\\n/g, '\n')
+    fs.writeFileSync(cookiePath, content, 'utf8')
     return cookiePath
   } catch { return null }
 }
