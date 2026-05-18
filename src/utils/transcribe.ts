@@ -318,17 +318,19 @@ const downloadAudio = async (url: string, tmpBase: string): Promise<void> => {
   const opts: Record<string, unknown> = {
     extractAudio: true,
     audioFormat: 'mp3',
-    audioQuality: 5,
+    audioQuality: 0,
     output: `${tmpBase}.%(ext)s`,
     noPlaylist: true,
     quiet: true,
     noWarnings: true,
     noCheckCertificate: true,
-    extractorArgs: 'youtube:player_client=android,tv_embedded',
-    sleepInterval: 2,
   }
 
-  if (cookiesFile) opts['cookies'] = cookiesFile
+  if (cookiesFile) {
+    opts['cookies'] = cookiesFile
+  } else {
+    opts['extractorArgs'] = 'youtube:player_client=android,tv_embedded'
+  }
 
   await Promise.race([
     ytDlpExec(url, opts as any),
