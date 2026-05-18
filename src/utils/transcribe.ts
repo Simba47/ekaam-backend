@@ -332,24 +332,35 @@ const downloadAudio = async (url: string, tmpBase: string): Promise<void> => {
     noCheckCertificate: true,
   }
 
-  // Try tv_embedded first — works for public videos, no cookies needed, no bot checks
+  const logErr = (e: unknown) => (e as Error).message?.slice(0, 600) ?? String(e)
+
+  // Attempt 1: android client — works for public videos from datacenter IPs, no PO token needed
   try {
-    logger.info('yt-dlp attempt 1: tv_embedded (no cookies)', { url })
-    await runYtDlp(url, { ...baseOpts, extractorArgs: 'youtube:player_client=tv_embedded,web' } as any)
+    logger.info('yt-dlp attempt 1: android (no cookies)', { url })
+    await runYtDlp(url, { ...baseOpts, extractorArgs: 'youtube:player_client=android' } as any)
     return
   } catch (err1) {
-    logger.warn('yt-dlp tv_embedded failed, trying with cookies', { error: (err1 as Error).message?.slice(0, 200) })
+    logger.warn('yt-dlp android failed', { error: logErr(err1) })
   }
 
-  // Fallback: use cookies with web client
+  // Attempt 2: tv_embedded (no cookies)
+  try {
+    logger.info('yt-dlp attempt 2: tv_embedded (no cookies)', { url })
+    await runYtDlp(url, { ...baseOpts, extractorArgs: 'youtube:player_client=tv_embedded' } as any)
+    return
+  } catch (err2) {
+    logger.warn('yt-dlp tv_embedded failed', { error: logErr(err2) })
+  }
+
+  // Attempt 3: fresh cookies with default client selection
   const cookiesFile = writeCookiesFile()
   if (cookiesFile) {
     try {
-      logger.info('yt-dlp attempt 2: web_creator with cookies', { url })
-      await runYtDlp(url, { ...baseOpts, cookies: cookiesFile, extractorArgs: 'youtube:player_client=web_creator,web' } as any)
+      logger.info('yt-dlp attempt 3: default client with cookies', { url })
+      await runYtDlp(url, { ...baseOpts, cookies: cookiesFile } as any)
       return
-    } catch (err2) {
-      logger.warn('yt-dlp web_creator with cookies failed', { error: (err2 as Error).message?.slice(0, 200) })
+    } catch (err3) {
+      logger.warn('yt-dlp default+cookies failed', { error: logErr(err3) })
     }
   }
 
