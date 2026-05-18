@@ -7,6 +7,7 @@
     "dev": "nodemon --watch src --ext ts --delay 1500 --exec \"tsx src/index.ts\"",
     "build": "tsc",
     "start": "node dist/index.js",
+    "postinstall": "node node_modules/yt-dlp-exec/scripts/postinstall.js",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",

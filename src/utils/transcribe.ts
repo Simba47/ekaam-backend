@@ -1,8 +1,9 @@
 import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
-import { spawnSync, exec } from 'child_process'
+import { spawnSync } from 'child_process'
 import FormData from 'form-data'
+import ytDlpExec from 'yt-dlp-exec'
 import Groq from 'groq-sdk'
 import axios from 'axios'
 import { env } from '../config/env'
@@ -313,47 +314,79 @@ const writeCookiesFile = (): string | null => {
   } catch { return null }
 }
 
-// Use system yt-dlp (installed by nixpacks — more up-to-date than the npm bundled binary)
-const execYtDlp = (args: string): Promise<void> =>
-  new Promise((resolve, reject) => {
-    exec(`yt-dlp ${args}`, { timeout: 130_000 }, (error, _stdout, stderr) => {
-      if (error) reject(new Error((stderr || error.message).slice(0, 800)))
-      else resolve()
-    })
-  })
+const runYtDlp = async (url: string, opts: Record<string, unknown>): Promise<void> => {
+  await Promise.race([
+    ytDlpExec(url, opts as any),
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('yt-dlp timed out after 120s')), 120_000)
+    ),
+  ])
+}
 
 const downloadAudio = async (url: string, tmpBase: string): Promise<void> => {
-  const output = `"${tmpBase}.%(ext)s"`
-  const base = `--extract-audio --audio-format mp3 -o ${output} --no-playlist --no-check-certificate --sleep-interval 2 --js-runtimes nodejs`
-  const logErr = (e: unknown) => (e as Error).message ?? String(e)
+  const baseOpts: Record<string, unknown> = {
+    extractAudio: true,
+    audioFormat: 'mp3',
+    output: `${tmpBase}.%(ext)s`,
+    noPlaylist: true,
+    noCheckCertificate: true,
+  }
 
-  // Attempt 1: mweb client — mobile web, avoids PO token requirement, works from server IPs
+  const logErr = (e: unknown) => (e as Error).message?.slice(0, 600) ?? String(e)
+  const cookiesFile = writeCookiesFile()
+
+  // Attempt 1: mweb client — works on most public videos from server IPs
   try {
-    logger.info('yt-dlp attempt 1: mweb (system binary)', { url })
-    await execYtDlp(`${base} --extractor-args "youtube:player_client=mweb" "${url}"`)
+    logger.info('yt-dlp attempt 1: mweb', { url })
+    await runYtDlp(url, {
+      ...baseOpts,
+      extractorArgs: 'youtube:player_client=mweb',
+    })
     return
   } catch (err1) {
     logger.warn('yt-dlp mweb failed', { error: logErr(err1) })
   }
 
-  // Attempt 2: tv_embedded client
+  // Attempt 2: ios client — different bot detection path
   try {
-    logger.info('yt-dlp attempt 2: tv_embedded (system binary)', { url })
-    await execYtDlp(`${base} --extractor-args "youtube:player_client=tv_embedded,web" "${url}"`)
+    logger.info('yt-dlp attempt 2: ios', { url })
+    await runYtDlp(url, {
+      ...baseOpts,
+      extractorArgs: 'youtube:player_client=ios',
+    })
     return
   } catch (err2) {
-    logger.warn('yt-dlp tv_embedded failed', { error: logErr(err2) })
+    logger.warn('yt-dlp ios failed', { error: logErr(err2) })
   }
 
-  // Attempt 3: cookies with default client (user must keep cookies fresh in Railway env)
-  const cookiesFile = writeCookiesFile()
-  if (cookiesFile) {
+  // Attempt 3: Apify residential proxy with mweb
+  if (env.APIFY_PROXY_PASSWORD) {
+    const apifyProxy = `http://groups-RESIDENTIAL,country-IN:${env.APIFY_PROXY_PASSWORD}@proxy.apify.com:8000`
     try {
-      logger.info('yt-dlp attempt 3: default client with cookies (system binary)', { url })
-      await execYtDlp(`${base} --cookies "${cookiesFile}" "${url}"`)
+      logger.info('yt-dlp attempt 3: Apify residential proxy', { url })
+      await runYtDlp(url, {
+        ...baseOpts,
+        proxy: apifyProxy,
+        extractorArgs: 'youtube:player_client=mweb',
+      })
       return
     } catch (err3) {
-      logger.warn('yt-dlp default+cookies failed', { error: logErr(err3) })
+      logger.warn('yt-dlp Apify proxy failed', { error: logErr(err3) })
+    }
+  }
+
+  // Attempt 4: cookies with mweb
+  if (cookiesFile) {
+    try {
+      logger.info('yt-dlp attempt 4: mweb with cookies', { url })
+      await runYtDlp(url, {
+        ...baseOpts,
+        cookies: cookiesFile,
+        extractorArgs: 'youtube:player_client=mweb',
+      })
+      return
+    } catch (err4) {
+      logger.warn('yt-dlp mweb+cookies failed', { error: logErr(err4) })
     }
   }
 
