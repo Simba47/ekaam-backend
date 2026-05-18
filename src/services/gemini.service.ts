@@ -16,6 +16,30 @@ export function getGeminiFlash(): GenerativeModel {
   })
 }
 
+// gemini-2.0-flash — used for script generation (streaming, creative writing)
+export function getGeminiPro(): GenerativeModel {
+  const apiKey = process.env.GEMINI_API_KEY
+  if (!apiKey) throw new Error('GEMINI_API_KEY is not configured')
+
+  const genAI = new GoogleGenerativeAI(apiKey)
+  return genAI.getGenerativeModel({
+    model: 'gemini-2.0-flash',
+    generationConfig: {
+      temperature: 0.9,
+      maxOutputTokens: 8192,
+    },
+  })
+}
+
+export async function* callGeminiStreaming(prompt: string): AsyncGenerator<string> {
+  const model = getGeminiPro()
+  const result = await model.generateContentStream(prompt)
+  for await (const chunk of result.stream) {
+    const text = chunk.text()
+    if (text) yield text
+  }
+}
+
 export async function callGeminiWithRetry(
   prompt: string,
   retries = 2,

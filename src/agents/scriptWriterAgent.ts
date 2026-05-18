@@ -1,7 +1,7 @@
 import { db } from '../db'
 import { trainingContent, styleKnowledge, userPersonalStyle } from '../db/schema'
 import { eq } from 'drizzle-orm'
-import { callClaudeStreaming } from '../utils/claude'
+import { callGeminiStreaming } from '../services/gemini.service'
 import { languageAgent } from './languageAgent'
 import { researchAgent } from './researchAgent'
 import { qcAgent } from './qcAgent'
@@ -163,7 +163,7 @@ export const scriptWriterAgent = {
 
       scriptContent = ''
 
-      for await (const chunk of callClaudeStreaming(prompt, undefined, 8192)) {
+      for await (const chunk of callGeminiStreaming(prompt)) {
         scriptContent += chunk
         onChunk?.(chunk)
       }

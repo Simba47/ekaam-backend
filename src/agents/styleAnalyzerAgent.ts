@@ -479,52 +479,23 @@ export const styleAnalyzerAgent = {
     )
 
     let m: NewMasterStyleResult
-    let builtWithModel = 'claude-sonnet'
+    const builtWithModel = 'claude-sonnet'
 
-    // Primary path: Gemini Flash (1M context — reads ALL transcripts at once)
-    if (env.GEMINI_API_KEY) {
-      try {
-        console.log('[StyleKnowledge] Attempting Gemini Flash build...')
-        m = await buildStyleKnowledgeWithGemini(sourceId, contents, analysisMap)
-        builtWithModel = 'gemini-1.5-flash'
-      } catch (geminiError) {
-        logger.warn('[StyleKnowledge] Gemini failed — falling back to Claude Sonnet', {
-          sourceId,
-          error: (geminiError as Error).message,
-        })
-
-        // Fallback: Claude (original implementation — analyses only, no raw transcripts)
-        const weightedAnalyses = applyRecencyWeights(
-          analyses,
-          contents.map(c => ({ id: c.id, publishedAt: c.publishedAt }))
-        )
-        if (weightedAnalyses.length === 0) {
-          logger.warn('No valid analyses found', { sourceId }); return
-        }
-        const analysesJson = weightedAnalyses.map(wa =>
-          JSON.stringify({ weight: wa.weight, publishedAt: wa.publishedAt, ...wa.analysis }, null, 2)
-        )
-        const prompt = MASTER_STYLE_PROMPT(analysesJson, source.name ?? 'Unknown Creator', weightedAnalyses.length)
-        const response = await callClaude(prompt, undefined, 6144)
-        m = parseJsonFromClaude<NewMasterStyleResult>(response)
-      }
-    } else {
-      // No Gemini key — use Claude directly
-      logger.info('GEMINI_API_KEY not set — using Claude Sonnet for StyleKnowledge build', { sourceId })
-      const weightedAnalyses = applyRecencyWeights(
-        analyses,
-        contents.map(c => ({ id: c.id, publishedAt: c.publishedAt }))
-      )
-      if (weightedAnalyses.length === 0) {
-        logger.warn('No valid analyses found', { sourceId }); return
-      }
-      const analysesJson = weightedAnalyses.map(wa =>
-        JSON.stringify({ weight: wa.weight, publishedAt: wa.publishedAt, ...wa.analysis }, null, 2)
-      )
-      const prompt = MASTER_STYLE_PROMPT(analysesJson, source.name ?? 'Unknown Creator', weightedAnalyses.length)
-      const response = await callClaude(prompt, undefined, 6144)
-      m = parseJsonFromClaude<NewMasterStyleResult>(response)
+    // Style profile building — Claude Sonnet
+    logger.info('[StyleKnowledge] Building style profile with Claude Sonnet', { sourceId })
+    const weightedAnalyses = applyRecencyWeights(
+      analyses,
+      contents.map(c => ({ id: c.id, publishedAt: c.publishedAt }))
+    )
+    if (weightedAnalyses.length === 0) {
+      logger.warn('No valid analyses found', { sourceId }); return
     }
+    const analysesJson = weightedAnalyses.map(wa =>
+      JSON.stringify({ weight: wa.weight, publishedAt: wa.publishedAt, ...wa.analysis }, null, 2)
+    )
+    const prompt = MASTER_STYLE_PROMPT(analysesJson, source.name ?? 'Unknown Creator', weightedAnalyses.length)
+    const response = await callClaude(prompt, undefined, 6144)
+    m = parseJsonFromClaude<NewMasterStyleResult>(response)
 
     try {
       const detectedNiche = m.niche ?? source.niche
