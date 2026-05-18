@@ -13,6 +13,7 @@ import {
   splitTranscript,
   extractChannelIdFromUrl,
   extractVideoIdFromUrl,
+  fetchTranscript,
 } from '../utils/youtube'
 import { scrapeInstagramProfile, withApifyRetry } from '../services/apify.service'
 
@@ -431,7 +432,17 @@ export const scraperAgent = {
     let transcriptConfidence: 'high' | 'low' = audioResult.confidence
 
     if (!fullTranscript) {
-      logger.info('Audio transcription failed — no transcript available', { videoId })
+      logger.info('Audio failed — falling back to YouTube captions', { videoId })
+      fullTranscript = await fetchTranscript(videoId)
+      if (fullTranscript) {
+        transcriptConfidence = 'low'
+        logger.info('Got transcript via captions fallback', {
+          videoId,
+          chars: fullTranscript.length,
+        })
+      } else {
+        logger.info('All transcript methods failed for video', { videoId })
+      }
     }
 
     let hookText: string | null = null

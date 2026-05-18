@@ -324,7 +324,7 @@ const execYtDlp = (args: string): Promise<void> =>
 
 const downloadAudio = async (url: string, tmpBase: string): Promise<void> => {
   const output = `"${tmpBase}.%(ext)s"`
-  const base = `--extract-audio --audio-format mp3 -o ${output} --no-playlist --no-check-certificate --sleep-interval 2`
+  const base = `--extract-audio --audio-format mp3 -o ${output} --no-playlist --no-check-certificate --sleep-interval 2 --js-runtimes nodejs`
   const logErr = (e: unknown) => (e as Error).message ?? String(e)
 
   // Attempt 1: mweb client — mobile web, avoids PO token requirement, works from server IPs
