@@ -9,6 +9,17 @@ import { polishWithSarvam } from '../utils/transcribe'
 import { SCRIPT_GENERATION_PROMPT, TrendContext, TranslatedBrandBrief } from '../modules/generator/generator.prompts'
 import { logger } from '../utils/logger'
 
+function validateScriptLanguage(script: string, language: string): boolean {
+  const lang = language.toLowerCase()
+  if (lang === 'tinglish' || lang === 'te-en' || lang === 'tenglish') {
+    return !/[ఀ-౿]/.test(script)
+  }
+  if (lang === 'hinglish' || lang === 'hi-en') {
+    return !/[ऀ-ॿ]/.test(script)
+  }
+  return true
+}
+
 export interface ScriptWriterInput {
   sourceId?: string
   userId?: string
@@ -163,9 +174,32 @@ export const scriptWriterAgent = {
 
       scriptContent = ''
 
-      for await (const chunk of callGeminiStreaming(prompt)) {
-        scriptContent += chunk
-        onChunk?.(chunk)
+      const tinglishSystem = language === 'Tinglish'
+        ? 'You are a Tinglish script writer. Tinglish means Telugu words written in Roman/English letters mixed with English. ABSOLUTE RULE: Never output Telugu Unicode script characters (అ ఆ ఇ ఈ ఉ చ జ ట ద న మ య ర ల వ శ స హ ళ క గ ఘ ఞ ణ ఒ ఓ ఔ etc.). Write ALL Telugu words phonetically in English letters only. Example: write "idly" not "ఇడ్లీ", "daantho paatu" not "దాంతో పాటు", "macha" not "మాచా". Never use placeholder tags like [word-use-roman].'
+        : undefined
+
+      for await (const chunk of callGeminiStreaming(prompt, tinglishSystem)) {
+        const cleanChunk = chunk.replace(/\*\*/g, '').replace(/`/g, '')
+        scriptContent += cleanChunk
+        onChunk?.(cleanChunk)
+      }
+      // Final pass — strip markdown and Tinglish artifacts
+      scriptContent = scriptContent.replace(/\*\*/g, '').replace(/`/g, '')
+      if (language === 'Tinglish') {
+        scriptContent = scriptContent.replace(/\[([^\]]+)-use-roman\]/g, (_, word) => word)
+        scriptContent = scriptContent.replace(/[ఀ-౿]/g, '')
+        scriptContent = scriptContent.replace(/  +/g, ' ').trim()
+      }
+
+      // Validate no wrong-script characters slipped through
+      const isValidScript = validateScriptLanguage(scriptContent, language)
+      if (!isValidScript) {
+        logger.warn(`Script contains banned Unicode characters for language ${language} — attempt ${attempt}`)
+        if (attempt < MAX_ATTEMPTS) {
+          regenerationInstructions = `CRITICAL ERROR: Your previous script contained Telugu Unicode characters (\\u0C00-\\u0C7F range). This is strictly forbidden for Tinglish. Rewrite the ENTIRE script using ONLY English/Roman alphabet letters. Every single Telugu word must be spelled phonetically in Roman letters. Not even one Telugu Unicode character is allowed.`
+          onChunk?.('\n\n--- Fixing language encoding... ---\n\n')
+          continue
+        }
       }
 
       qcResult = await qcAgent.evaluate({

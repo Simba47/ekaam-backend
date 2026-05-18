@@ -68,7 +68,8 @@ const extractAudioChunk = (audioPath: string, startSec: number, endSec: number, 
     '-y', '-i', audioPath,
     '-ss', String(startSec),
     '-to', String(endSec),
-    '-acodec', 'copy',
+    '-ar', '16000',
+    '-ac', '1',
     '-loglevel', 'error',
     chunkPath,
   ])
@@ -160,7 +161,7 @@ const transcribeWithSarvam = async (
         if (chunkIndex > 0) await new Promise(r => setTimeout(r, CHUNK_DELAY_MS))
 
         try {
-          const form = new FormData()
+          let form = new FormData()
           form.append('file', fs.createReadStream(chunkPath), {
             filename: 'audio.mp3',
             contentType: 'audio/mpeg',
@@ -169,27 +170,58 @@ const transcribeWithSarvam = async (
           form.append('model', 'saaras:v3')
           form.append('with_timestamps', 'false')
 
-          await acquireSarvam()
-          try {
-            const response = await axios.post(
-              'https://api.sarvam.ai/speech-to-text',
-              form,
-              {
-                headers: { ...form.getHeaders(), 'api-subscription-key': env.SARVAM_API_KEY },
-                timeout: 120000,
-              }
-            )
-            const text: string = response.data?.transcript || response.data?.text || ''
-            if (text.trim()) chunkTranscripts.push(text.trim())
-          } finally {
-            releaseSarvam()
+          // Retry up to 3 times on 429, with increasing backoff
+          const MAX_SARVAM_RETRIES = 3
+          let sarvamSuccess = false
+          for (let retry = 0; retry < MAX_SARVAM_RETRIES; retry++) {
+            if (retry > 0) {
+              const waitMs = retry * 15000
+              logger.info(`Sarvam chunk ${chunkIndex + 1} — retrying in ${waitMs / 1000}s (attempt ${retry + 1}/${MAX_SARVAM_RETRIES})`)
+              await new Promise(r => setTimeout(r, waitMs))
+              // Re-create form for retry (stream can only be consumed once)
+              form = new FormData()
+              form.append('file', fs.createReadStream(chunkPath), {
+                filename: 'audio.mp3',
+                contentType: 'audio/mpeg',
+              })
+              if (languageCode) form.append('language_code', languageCode)
+              form.append('model', 'saaras:v3')
+              form.append('with_timestamps', 'false')
+            }
+
+            await acquireSarvam()
+            try {
+              const response = await axios.post(
+                'https://api.sarvam.ai/speech-to-text',
+                form,
+                {
+                  headers: { ...form.getHeaders(), 'api-subscription-key': env.SARVAM_API_KEY },
+                  timeout: 120000,
+                }
+              )
+              const text: string = response.data?.transcript || response.data?.text || ''
+              if (text.trim()) chunkTranscripts.push(text.trim())
+              sarvamSuccess = true
+              break
+            } catch (chunkErr: unknown) {
+              const err = chunkErr as { message?: string; response?: { status?: number; data?: unknown } }
+              const status = err.response?.status
+              logger.warn(`Sarvam chunk ${chunkIndex + 1} attempt ${retry + 1} failed`, {
+                error: err.message,
+                status,
+              })
+              if (status !== 429) break // only retry on rate limit
+            } finally {
+              // Hold the lock for 10s after each call so back-to-back requests don't spam Sarvam
+              await new Promise(r => setTimeout(r, 10000))
+              releaseSarvam()
+            }
           }
-        } catch (chunkErr: unknown) {
-          const err = chunkErr as { message?: string; response?: { status?: number; data?: unknown } }
-          logger.warn(`Sarvam chunk ${chunkIndex + 1} failed`, {
-            error: err.message,
-            status: err.response?.status,
-          })
+          if (!sarvamSuccess) {
+            logger.warn(`Sarvam chunk ${chunkIndex + 1} failed after ${MAX_SARVAM_RETRIES} attempts — skipping chunk`)
+          }
+        } catch (outerErr: unknown) {
+          logger.warn(`Sarvam chunk ${chunkIndex + 1} outer error`, { error: (outerErr as Error).message })
         }
       }
 

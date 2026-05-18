@@ -22,7 +22,12 @@ export const languageAgent = {
     }
 
     try {
-      const prompt = LANGUAGE_ADAPTATION_PROMPT(styleProfile, targetLanguage)
+      // Strip Telugu Unicode from profile before sending to Claude for Tinglish
+      // so Claude doesn't learn to output Telugu script from the examples
+      const sanitizedProfile = (targetLanguage === 'Tinglish' || targetLanguage === 'te-en')
+        ? JSON.parse(JSON.stringify(styleProfile).replace(/[ఀ-౿]+/g, ''))
+        : styleProfile
+      const prompt = LANGUAGE_ADAPTATION_PROMPT(sanitizedProfile, targetLanguage)
       const adaptedContext = await callClaude(prompt, undefined, 1024)
       return adaptedContext
     } catch (error) {

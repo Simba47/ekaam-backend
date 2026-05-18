@@ -134,8 +134,114 @@ const TELUGU_SCRIPT_REGEX = /[\u0C00-\u0C7F]+/g
 
 function sanitizeForTinglish(profile: object): object {
   const json = JSON.stringify(profile)
-  const sanitized = json.replace(TELUGU_SCRIPT_REGEX, (match) => `[${match}-use-roman]`)
+  const sanitized = json.replace(TELUGU_SCRIPT_REGEX, '')  // strip — never use [word-use-roman] tags
   try { return JSON.parse(sanitized) } catch { return profile }
+}
+
+function getLanguageRules(language: string): string {
+  const lang = language.toLowerCase().trim()
+
+  if (lang === 'tinglish' || lang === 'te-en' || lang === 'tenglish') {
+    return `
+LANGUAGE: Tinglish (Romanised Telugu) — READ EVERY WORD
+DEFINITION: Tinglish = Telugu words spelled in English/Roman letters + English words mixed naturally.
+It is NOT Telugu Unicode script. It is exactly how a Telugu person types on WhatsApp or Instagram.
+
+ABSOLUTE ZERO-TOLERANCE RULE:
+Do NOT use even ONE Telugu Unicode character (ఀ-౿ range).
+Do NOT use placeholder tags like [word-use-roman] — write the actual romanized word directly.
+Do NOT use markdown like **bold** or backtick formatting.
+
+Telugu word to Roman spelling examples:
+tinesanu (tineShanu), mava, annamata, daantho paatu, kummesanu, vere level,
+nenu, sariledu, chesanu, ayipoyindi, ela, kadu, cheppandi, vellali
+
+MIXING RULE: English words stay in English. Telugu words get romanised in Roman letters only.
+
+SENTENCE STRUCTURE — Telugu word order (Subject + Object + Verb):
+CORRECT: "Nenu biryani tinesanu" | CORRECT: "Aa combo try chesaka meeru cheppakunda undaledu"
+
+CORRECT Tinglish examples (match this exact style):
+"Bro seriously, ee breakfast ki morning nundi wait chesanu annamata"
+"Aa biryani tinnaka life ante idhe anipinchindi mava"
+"Stomach full ayinaa oka shawarma vadante ela avutundi?"
+"Comment lo cheppandi mama — nenu judge cheyanu, nenu kuda ilantivadine"
+
+WRONG — never do this:
+Telugu Unicode script of any kind — BANNED
+[word-use-roman] placeholder tags — BANNED
+Markdown bold or backtick formatting — BANNED
+
+---
+
+REGISTER CONSISTENCY — CRITICAL:
+
+A Telugu creator speaks in ONE register throughout.
+Never mix formal and casual in the same script.
+
+For casual creators (most food/lifestyle/vlog content):
+
+CASUAL TINGLISH — USE THESE:
+  Address viewer as: bro, mava, anna, nanna, ra
+  Commands: cheyyi (not cheyyandi), tinnu (not tinnandi),
+            cheppu (not cheppandi), subscribe chesuko (not subscribe cheyyandi)
+  Verbs: unnaru is ok / unnaruga (very casual)
+         vellaru / vellaruga
+  Connectors: kaani, so obviously, aa taruvata,
+              daantho paatu, last ki, pakka, correct ga
+
+FORMAL TINGLISH — NEVER USE FOR CASUAL CONTENT:
+  anaru, chepparu (respectful past tense)
+  gurtupettukondi (formal command)
+  marichipokandi (formal negative command)
+  tinnavaatini (overly formal object marker)
+  chesukovadam (formal infinitive form)
+
+SPELLING CONSISTENCY RULES:
+Pick ONE spelling per word and use it throughout:
+  meeru OR miru — pick one, never both in the same script
+  biryani OR biryanilu — pick one
+Use the same spelling every time the same word appears.
+
+REGISTER SELF-CHECK:
+Before outputting the script, scan for formal words.
+If any formal word appears in a casual script — replace it.
+The test: would a 22-year-old Telugu guy say this
+to his friend in a voice note? If no — rewrite it.
+
+CTA RULES FOR TINGLISH:
+Never use: "subscribe chesukovadam marichipokandi"
+Never use: "I love you all" (jarring English switch)
+Never use: "gurtupettukondi" (too formal)
+
+Use instead:
+"Subscribe cheskunte chaalu — next time miss avvaavu"
+"Nenu untanu, bye bye!"
+"Comment cheyyi bro — waiting untanu"
+"Next video lo kalustanu, pakka!"
+
+---
+
+ENERGY: Sound like a Telugu creator talking to friends in a voice note.`
+  }
+
+  if (lang === 'hinglish' || lang === 'hi-en') {
+    return `
+LANGUAGE: Hinglish (Romanised Hindi + English)
+STRICT RULE: Zero Devanagari script. Write all Hindi words in Roman letters only.
+CORRECT: "Bhai aaj ka din ekdum mast tha yaar"
+WRONG: "आज मैंने" — Devanagari not allowed`
+  }
+
+  if (lang === 'telugu' || lang === 'te') {
+    return `LANGUAGE: Telugu\nWrite entirely in Telugu Unicode script. English technical terms can stay in English.`
+  }
+
+  if (lang === 'hindi' || lang === 'hi') {
+    return `LANGUAGE: Hindi\nWrite entirely in Hindi Devanagari script. English technical terms can stay in English.`
+  }
+
+  return `LANGUAGE: ${language}\nWrite naturally in ${language}. Use the creator's natural language patterns and energy.`
 }
 
 // Pull structured fields out of the profile object — handles both camelCase and snake_case keys
@@ -271,6 +377,58 @@ Natural entry line: ${brandBrief.natural_entry_line}
 `
 }
 
+// Word limits per format — used for short-form quality rules
+const FORMAT_WORD_LIMITS: Record<string, { min: number; max: number }> = {
+  reel_15:       { min: 40,  max: 60  },
+  reel_60:       { min: 80,  max: 120 },
+  shorts:        { min: 120, max: 150 },
+  tiktok:        { min: 60,  max: 100 },
+  instagram_reel:{ min: 80,  max: 120 },
+  linkedin:      { min: 200, max: 250 },
+}
+
+function buildShortFormQualityRules(minWords: number, maxWords: number): string {
+  return `
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SHORT-FORM SCRIPT QUALITY RULES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. HOOK — first 2-3 sentences must do ONE of these:
+   - Curiosity: "Ee roju nenu chesina damage chuste meeru shock avutaru"
+   - FOMO: "Idi try cheyakunda pothe meeru serious ga miss avutaru"
+   - Mid-emotion: "Bro seriously, adi vere level annamata — explain cheyyadam impossible"
+   NEVER start with: "Today nenu X chesanu" or "Morning X tho start chesanu" — diary openers, not hooks.
+
+2. REACTIONS after every key point:
+   After mentioning food/experience/event, add how it felt:
+   - "Aa smell vasthe chaalu bro"
+   - "Aa sambar — okasari try chesav ante meeru artham avutaru"
+   - "Meeru try chesaru aa?"
+   Never just list items — always react to each one.
+
+3. ENERGY ARC:
+   Opening: Curiosity/intrigue (medium energy)
+   Middle: Building excitement (higher energy)
+   Peak: Best moment with maximum energy
+   Close: Warm/funny/relatable (smooth landing)
+
+4. FLOW — sentences must connect naturally:
+   Use connectors: "kaani", "so obviously", "daantho paatu", "last ki", "aa taruvata", "ee sariki"
+   Avoid starting every sentence the same way.
+   Avoid choppy 4-word sentences back to back.
+
+5. CTA — must reference something specific from this script:
+   CORRECT: "Mehfil ki vellaru aa? Ledu ante this weekend try cheyandi — nenu guarantee istanu"
+   WRONG: "Comment cheppandi. Nenu judge cheyanu." (generic — not specific to this content)
+
+SELF CHECK before finalising:
+- Read aloud — does it sound like a person talking or a list being read?
+- Is the hook strong enough to stop a scroll?
+- Does energy build through the script?
+- Is the CTA specific to this video's content?
+- Word count between ${minWords} and ${maxWords}?
+If any answer is no — rewrite that section.`
+}
+
 export const SCRIPT_GENERATION_PROMPT = (input: ScriptGenerationInput): string => {
   const tones = input.tone.split(', ').filter(Boolean)
   const toneInstructions = tones
@@ -281,6 +439,12 @@ export const SCRIPT_GENERATION_PROMPT = (input: ScriptGenerationInput): string =
 
   const formatKey = input.format ?? input.platform
   const platformRules = FORMAT_RULES[formatKey] ?? FORMAT_RULES[input.platform] ?? FORMAT_RULES.youtube
+
+  const wordLimits = FORMAT_WORD_LIMITS[formatKey] ?? FORMAT_WORD_LIMITS[input.platform]
+  const isShortForm = wordLimits !== undefined && wordLimits.max <= 300
+  const shortFormRules = isShortForm
+    ? buildShortFormQualityRules(wordLimits.min, wordLimits.max)
+    : ''
 
   // Sanitize Telugu script from profile when writing Tinglish
   const rawProfile = input.language === 'Tinglish'
@@ -297,43 +461,7 @@ export const SCRIPT_GENERATION_PROMPT = (input: ScriptGenerationInput): string =
   } = extractProfileFields(rawProfile)
 
   // ── Language rules ─────────────────────────────────────────────────────────
-  const languageRules = input.language === 'Tinglish'
-    ? `TINGLISH — MANDATORY RULES:
-
-❌ ZERO Telugu script characters (అ ఆ ఇ ఈ చేయి మన etc.) — INSTANT FAIL if any appear
-✅ ALL Telugu words written phonetically in Roman/English letters
-
-HOW IT WORKS:
-Telugu spoken words spelled in Roman letters + English words mixed naturally.
-This is exactly how Telugu creators type to their fans.
-
-EXAMPLE SENTENCES (match this exact style):
-  "Mee life lo oka chinna change cheyyandi — results chustaru"
-  "Idi chadivina tarvata, mee thinking completely shift avutundi"
-  "Chala mandi ki telidhu... but idi truth"
-  "Oka pani cheyyadam mano cheskovaddu, consistency important"
-  "Meeru daily 5 minutes invest chesthe, life maaruthundi guaranteed"
-  "Simple ga cheppali ante — focus lekunte results raavu"
-  "Ikkade chala mandi fail avutunnaru ento telusaa? Because they don't have a system"
-
-RATIO: ~60% Telugu words (Roman letters) + ~40% English
-Telugu script examples → Roman: "చేయి"→"cheyi"  "మనం"→"manam"  "ఇది"→"idi"  "ఎందుకు"→"enduku"`
-
-    : input.language === 'Hinglish'
-    ? `HINGLISH — Mix Hindi (Devanagari) + English naturally.
-Hindi words for emotional/cultural concepts, English for technical/modern terms.
-Natural code-switching like Indian creators do.`
-
-    : input.language === 'English'
-    ? `ENGLISH — MANDATORY RULES:
-Write 100% in English. 
-Do NOT use any Telugu script characters (అ ఆ ఇ etc.).
-Do NOT use any Telugu words (even romanized) unless the topic demands it.
-The creator's style = energy, tone, rhythm, conversational flair — NOT their language.
-Adapt their PERSONALITY into English. Sound like them but speak English.`
-
-    : `Write entirely in: ${input.language}
-Use the creator's natural language patterns and energy.`
+  const languageRules = getLanguageRules(input.language)
 
   // ── Sections built from actual profile data ────────────────────────────────
   const hooksSection = bestHooks.length > 0
@@ -450,7 +578,7 @@ Why this needs to feel like today, not last month: ${input.trendContext.urgency_
 FORMAT RULES — FOLLOW EXACTLY
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${platformRules}
-
+${shortFormRules ? `\n${shortFormRules}` : ''}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 TONE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -466,7 +594,8 @@ PREVIOUS ATTEMPT FEEDBACK — FIX THESE SPECIFICALLY
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${input.regenerationInstructions ?? input.improvementFeedback}
 
-` : ''}Now write the script. Sound like them. Be specific. Be original.${input.language === 'Tinglish' ? '\nZERO Telugu script characters — Roman letters only for Telugu words.' : ''}
+` : ''}Now write the script. Sound like them. Be specific. Be original.
+CRITICAL: Output plain spoken text ONLY. NO markdown, NO asterisks (**), NO bold, NO bullet points, NO headers. Just the raw script words as they would be spoken aloud.
 `
 }
 
@@ -517,10 +646,12 @@ Original Style Profile:
 ${JSON.stringify(styleProfile, null, 2)}
 
 ${targetLanguage === 'Tinglish' ? `TINGLISH RULES:
-- Tinglish = Telugu words in Roman/English letters + English words mixed naturally
-- NEVER suggest Telugu script (అ ఆ ఇ చేయి etc.) — only Roman phonetic spellings
-- Convert vocabulary: "చేయి"→"cheyi"  "మనం"→"manam"  "ఇది"→"idi"  "ఎందుకు"→"enduku"
-- Show rhythm with Roman-Telugu example sentences
+- Tinglish = Telugu words written in Roman/English letters + English words naturally mixed
+- ZERO Telugu Unicode script characters allowed (ఀ-౿ range)
+- Write ALL Telugu words phonetically in Roman letters only
+- Example conversions: tinesanu, mava, annamata, daantho paatu, nenu, sariledu, chesanu
+- Show rhythm using Roman-Telugu example sentences — like WhatsApp Telugu typing
+- Sentence structure follows Telugu grammar order (Subject + Object + Verb)
 ` : ''}
 Adapt vocab, CTAs, and transitions to natural ${targetLanguage} equivalents.
 Keep the same tone, energy, and personality.

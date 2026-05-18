@@ -23,7 +23,7 @@ export function getGeminiPro(): GenerativeModel {
 
   const genAI = new GoogleGenerativeAI(apiKey)
   return genAI.getGenerativeModel({
-    model: 'gemini-2.0-flash',
+    model: 'gemini-2.5-flash',
     generationConfig: {
       temperature: 0.9,
       maxOutputTokens: 8192,
@@ -31,12 +31,36 @@ export function getGeminiPro(): GenerativeModel {
   })
 }
 
-export async function* callGeminiStreaming(prompt: string): AsyncGenerator<string> {
-  const model = getGeminiPro()
-  const result = await model.generateContentStream(prompt)
-  for await (const chunk of result.stream) {
-    const text = chunk.text()
-    if (text) yield text
+export async function* callGeminiStreaming(prompt: string, systemInstruction?: string): AsyncGenerator<string> {
+  const apiKey = process.env.GEMINI_API_KEY
+  if (!apiKey) throw new Error('GEMINI_API_KEY is not configured')
+  const genAI = new GoogleGenerativeAI(apiKey)
+  const model = genAI.getGenerativeModel({
+    model: 'gemini-2.5-flash',
+    generationConfig: { temperature: 0.9, maxOutputTokens: 8192 },
+    ...(systemInstruction ? { systemInstruction } : {}),
+  })
+
+  const MAX_RETRIES = 3
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const result = await model.generateContentStream(prompt)
+      for await (const chunk of result.stream) {
+        const text = chunk.text()
+        if (text) yield text
+      }
+      return
+    } catch (err: unknown) {
+      const msg = (err as Error).message ?? ''
+      const is503 = msg.includes('503') || msg.includes('Service Unavailable') || msg.includes('high demand')
+      if (is503 && attempt < MAX_RETRIES) {
+        const waitMs = attempt * 15000
+        console.warn(`[Gemini] 503 on attempt ${attempt} — retrying in ${waitMs / 1000}s...`)
+        await new Promise(r => setTimeout(r, waitMs))
+        continue
+      }
+      throw err
+    }
   }
 }
 

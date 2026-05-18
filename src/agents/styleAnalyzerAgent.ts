@@ -490,11 +490,30 @@ export const styleAnalyzerAgent = {
     if (weightedAnalyses.length === 0) {
       logger.warn('No valid analyses found', { sourceId }); return
     }
-    const analysesJson = weightedAnalyses.map(wa =>
-      JSON.stringify({ weight: wa.weight, publishedAt: wa.publishedAt, ...wa.analysis }, null, 2)
-    )
+    logger.info(`[StyleKnowledge] Using all ${weightedAnalyses.length} analyses (compact format)`, { sourceId })
+    // Compact format — key fields only, no pretty-printing — keeps all videos under TPM limit
+    const analysesJson = weightedAnalyses.map(wa => JSON.stringify({
+      w: wa.weight,
+      pub: wa.publishedAt,
+      hookType: wa.analysis.hookType,
+      hookStrength: wa.analysis.hookStrength,
+      hookPattern: wa.analysis.hookPattern,
+      narrative: wa.analysis.narrativeStructure,
+      body: wa.analysis.bodyStructure,
+      ideaStyle: wa.analysis.ideaStyle,
+      persona: wa.analysis.persona,
+      rhythm: wa.analysis.rhythmPattern,
+      pacing: wa.analysis.pacingStyle,
+      tone: wa.analysis.tone,
+      energy: wa.analysis.energyLevel,
+      sig: wa.analysis.signaturePatterns,
+      powerWords: wa.analysis.powerWords,
+      recurring: wa.analysis.recurringPhrases,
+      transitions: wa.analysis.transitionPhrases,
+      cta: wa.analysis.ctaPattern,
+    }))
     const prompt = MASTER_STYLE_PROMPT(analysesJson, source.name ?? 'Unknown Creator', weightedAnalyses.length)
-    const response = await callClaude(prompt, undefined, 6144)
+    const response = await callClaude(prompt, undefined, 16000)
     m = parseJsonFromClaude<NewMasterStyleResult>(response)
 
     try {

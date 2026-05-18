@@ -86,30 +86,26 @@ export const scraperAgent = {
 
     const allVideoIds = await getAllPlaylistVideos(uploadsPlaylistId)
 
-    // Batch-fetch durations (50 per API call) to split into short and long
-    const SHORT_MAX_SECONDS = 180  // YouTube Shorts are ≤ 3 min
+    // Batch-fetch durations (50 per API call) — short videos only (≤ 3 min)
+    const SHORT_MAX_SECONDS = 180
     const SHORT_LIMIT = 50
-    const LONG_LIMIT = 50
 
     const shortIds: string[] = []
-    const longIds: string[] = []
 
-    for (let i = 0; i < allVideoIds.length && (shortIds.length < SHORT_LIMIT || longIds.length < LONG_LIMIT); i += 50) {
+    for (let i = 0; i < allVideoIds.length && shortIds.length < SHORT_LIMIT; i += 50) {
       const batch = allVideoIds.slice(i, i + 50)
       const details = await getBatchVideoDetails(batch)
       for (const video of details) {
         const duration = parseISO8601Duration(video.contentDetails.duration)
         if (duration <= SHORT_MAX_SECONDS && shortIds.length < SHORT_LIMIT) {
           shortIds.push(video.id)
-        } else if (duration > SHORT_MAX_SECONDS && longIds.length < LONG_LIMIT) {
-          longIds.push(video.id)
         }
       }
     }
 
-    const videoIds = [...shortIds, ...longIds]
+    const videoIds = shortIds
     logger.info(
-      `Found ${allVideoIds.length} total — selected ${shortIds.length} short (≤${SHORT_MAX_SECONDS}s) + ${longIds.length} long`,
+      `Found ${allVideoIds.length} total — selected ${shortIds.length} short (≤${SHORT_MAX_SECONDS}s)`,
       { sourceId }
     )
 

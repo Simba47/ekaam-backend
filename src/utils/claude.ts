@@ -15,7 +15,7 @@ export interface ClaudeMessage {
   content: string
 }
 
-const CALL_TIMEOUT_MS = 120_000 // 2 min for long scripts
+const CALL_TIMEOUT_MS = 300_000 // 5 min — style profile builds with many transcripts can be slow
 const MAX_RETRIES = 3
 
 const withTimeout = <T>(promise: Promise<T>, ms: number, label: string): Promise<T> => {
@@ -39,7 +39,7 @@ export const callClaude = async (
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     if (attempt > 0) {
-      const backoffMs = attempt * 20_000 // 20s, 40s, 60s
+      const backoffMs = attempt === 1 ? 65_000 : attempt * 30_000 // 65s, 60s, 90s — TPM resets per minute
       logger.warn(`Claude 429 — retrying in ${backoffMs / 1000}s`, { attempt })
       await new Promise(r => setTimeout(r, backoffMs))
     }
