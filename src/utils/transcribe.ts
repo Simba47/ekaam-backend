@@ -322,13 +322,10 @@ const downloadAudio = async (url: string, tmpBase: string): Promise<void> => {
     audioFormat: 'mp3',
     output: `${tmpBase}.%(ext)s`,
     noPlaylist: true,
-    quiet: true,
-    noWarnings: true,
     noCheckCertificate: true,
+    extractorArgs: 'youtube:player_client=ios',
   }
 
-  // ios client has audio-only streams and doesn't require PO tokens
-  opts['extractorArgs'] = 'youtube:player_client=ios'
   if (cookiesFile) opts['cookies'] = cookiesFile
 
   await Promise.race([
