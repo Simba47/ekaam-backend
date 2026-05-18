@@ -1,6 +1,6 @@
 [build]
 builder = "nixpacks"
-buildCommand = "npm install && npm run build"
+buildCommand = "npm install && npm run build && curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o node_modules/yt-dlp-exec/bin/yt-dlp && chmod +x node_modules/yt-dlp-exec/bin/yt-dlp"
 
 [deploy]
 startCommand = "npm start"
