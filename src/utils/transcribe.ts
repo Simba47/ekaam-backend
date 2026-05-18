@@ -321,16 +321,15 @@ const downloadAudio = async (url: string, tmpBase: string): Promise<void> => {
     extractAudio: true,
     audioFormat: 'mp3',
     audioQuality: 0,
-    format: 'bestaudio/best',
     output: `${tmpBase}.%(ext)s`,
     noPlaylist: true,
     quiet: true,
     noWarnings: true,
     noCheckCertificate: true,
+    // tv_embedded bypasses bot detection and doesn't require PO tokens
+    extractorArgs: 'youtube:player_client=tv_embedded',
   }
 
-  // tv_embedded client doesn't require proof-of-origin tokens — works with cookies alone
-  opts['extractorArgs'] = 'youtube:player_client=tv_embedded'
   if (cookiesFile) opts['cookies'] = cookiesFile
 
   await Promise.race([
