@@ -314,10 +314,16 @@ const writeCookiesFile = (): string | null => {
   } catch { return null }
 }
 
-const downloadAudio = async (url: string, tmpBase: string): Promise<void> => {
-  const cookiesFile = writeCookiesFile()
+const runYtDlp = (url: string, opts: Record<string, unknown>): Promise<void> =>
+  Promise.race([
+    ytDlpExec(url, opts as any),
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('yt-dlp timed out after 120s')), 120_000)
+    ),
+  ])
 
-  const opts: Record<string, unknown> = {
+const downloadAudio = async (url: string, tmpBase: string): Promise<void> => {
+  const baseOpts: Record<string, unknown> = {
     extractAudio: true,
     audioFormat: 'mp3',
     output: `${tmpBase}.%(ext)s`,
@@ -325,20 +331,28 @@ const downloadAudio = async (url: string, tmpBase: string): Promise<void> => {
     noCheckCertificate: true,
   }
 
-  if (cookiesFile) {
-    opts['cookies'] = cookiesFile
-    // web_creator (YouTube Studio) supports cookies and has audio streams; ios client skips cookies entirely
-    opts['extractorArgs'] = 'youtube:player_client=web_creator,web'
-  } else {
-    opts['extractorArgs'] = 'youtube:player_client=tv_embedded,web'
+  // Try tv_embedded first — works for public videos, no cookies needed, no bot checks
+  try {
+    logger.info('yt-dlp attempt 1: tv_embedded (no cookies)', { url })
+    await runYtDlp(url, { ...baseOpts, extractorArgs: 'youtube:player_client=tv_embedded,web' } as any)
+    return
+  } catch (err1) {
+    logger.warn('yt-dlp tv_embedded failed, trying with cookies', { error: (err1 as Error).message?.slice(0, 200) })
   }
 
-  await Promise.race([
-    ytDlpExec(url, opts as any),
-    new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('yt-dlp timed out after 120s')), 120_000)
-    ),
-  ])
+  // Fallback: use cookies with web client
+  const cookiesFile = writeCookiesFile()
+  if (cookiesFile) {
+    try {
+      logger.info('yt-dlp attempt 2: web_creator with cookies', { url })
+      await runYtDlp(url, { ...baseOpts, cookies: cookiesFile, extractorArgs: 'youtube:player_client=web_creator,web' } as any)
+      return
+    } catch (err2) {
+      logger.warn('yt-dlp web_creator with cookies failed', { error: (err2 as Error).message?.slice(0, 200) })
+    }
+  }
+
+  throw new Error('All yt-dlp download strategies failed')
 }
 
 export const downloadAndTranscribe = async (
