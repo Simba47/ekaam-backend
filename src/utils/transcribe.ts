@@ -8,7 +8,6 @@ import Groq from 'groq-sdk'
 import axios from 'axios'
 import { env } from '../config/env'
 import { logger } from './logger'
-import { getYouTubeStreamUrl } from '../services/apify.service'
 
 const CHUNK_DURATION_SECONDS = 25  // Sarvam starter plan limit is 30s — 25s + 5s overlap = 30s max
 const OVERLAP_SECONDS = 5
@@ -304,20 +303,17 @@ export const polishWithSarvam = async (
   }
 }
 
+const writeCookiesFile = (): string | null => {
+  if (!env.YOUTUBE_COOKIES) return null
+  const cookiePath = path.join(os.tmpdir(), 'yt_cookies.txt')
+  try {
+    fs.writeFileSync(cookiePath, env.YOUTUBE_COOKIES, 'utf8')
+    return cookiePath
+  } catch { return null }
+}
+
 const downloadAudio = async (url: string, tmpBase: string): Promise<void> => {
-  // Step 1: Apify (residential proxy) resolves YouTube URL → direct stream URL
-  // Step 2: yt-dlp downloads audio from that direct URL (no bot check on CDN)
-  let downloadUrl = url
-  if (env.APIFY_API_TOKEN && (url.includes('youtube.com') || url.includes('youtu.be'))) {
-    try {
-      const streamUrl = await getYouTubeStreamUrl(url)
-      if (streamUrl) downloadUrl = streamUrl
-    } catch (err) {
-      logger.warn('Apify URL resolution failed — falling back to direct yt-dlp', {
-        error: (err as Error).message,
-      })
-    }
-  }
+  const cookiesFile = writeCookiesFile()
 
   const opts: Record<string, unknown> = {
     extractAudio: true,
@@ -328,16 +324,14 @@ const downloadAudio = async (url: string, tmpBase: string): Promise<void> => {
     quiet: true,
     noWarnings: true,
     noCheckCertificate: true,
+    extractorArgs: 'youtube:player_client=android,tv_embedded',
+    sleepInterval: 2,
   }
 
-  // Only pass extractor args when hitting YouTube directly (not a CDN stream URL)
-  if (downloadUrl === url) {
-    opts['extractorArgs'] = 'youtube:player_client=android,tv_embedded'
-    opts['sleepInterval'] = 2
-  }
+  if (cookiesFile) opts['cookies'] = cookiesFile
 
   await Promise.race([
-    ytDlpExec(downloadUrl, opts as any),
+    ytDlpExec(url, opts as any),
     new Promise<never>((_, reject) =>
       setTimeout(() => reject(new Error('yt-dlp timed out after 120s')), 120_000)
     ),
