@@ -327,11 +327,9 @@ const downloadAudio = async (url: string, tmpBase: string): Promise<void> => {
     noCheckCertificate: true,
   }
 
-  if (cookiesFile) {
-    opts['cookies'] = cookiesFile
-  } else {
-    opts['extractorArgs'] = 'youtube:player_client=tv_embedded,web'
-  }
+  // ios client has audio-only streams and doesn't require PO tokens
+  opts['extractorArgs'] = 'youtube:player_client=ios'
+  if (cookiesFile) opts['cookies'] = cookiesFile
 
   await Promise.race([
     ytDlpExec(url, opts as any),
