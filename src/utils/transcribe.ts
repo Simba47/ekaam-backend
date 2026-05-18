@@ -320,7 +320,6 @@ const downloadAudio = async (url: string, tmpBase: string): Promise<void> => {
   const opts: Record<string, unknown> = {
     extractAudio: true,
     audioFormat: 'mp3',
-    audioQuality: 0,
     output: `${tmpBase}.%(ext)s`,
     noPlaylist: true,
     quiet: true,
