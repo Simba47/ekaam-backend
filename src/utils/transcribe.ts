@@ -304,20 +304,26 @@ export const polishWithSarvam = async (
 }
 
 const downloadAudio = async (url: string, tmpBase: string): Promise<void> => {
-  // tv_embedded + web player clients bypass YouTube bot detection without cookies or proxy
+  // Route through Apify residential proxy so YouTube sees a real home IP, not a datacenter
+  const opts: Record<string, unknown> = {
+    extractAudio: true,
+    audioFormat: 'mp3',
+    audioQuality: 5,
+    output: `${tmpBase}.%(ext)s`,
+    noPlaylist: true,
+    quiet: true,
+    noWarnings: true,
+    noCheckCertificate: true,
+    extractorArgs: 'youtube:player_client=android,tv_embedded',
+    sleepInterval: 2,
+  }
+
+  if (env.APIFY_PROXY_PASSWORD) {
+    opts['proxy'] = `http://groups-RESIDENTIAL,country-IN:${env.APIFY_PROXY_PASSWORD}@proxy.apify.com:8000`
+  }
+
   await Promise.race([
-    ytDlpExec(url, {
-      extractAudio: true,
-      audioFormat: 'mp3',
-      audioQuality: 5,
-      output: `${tmpBase}.%(ext)s`,
-      noPlaylist: true,
-      quiet: true,
-      noWarnings: true,
-      noCheckCertificate: true,
-      extractorArgs: 'youtube:player_client=android,tv_embedded',
-      sleepInterval: 2,
-    } as any),
+    ytDlpExec(url, opts as any),
     new Promise<never>((_, reject) =>
       setTimeout(() => reject(new Error('yt-dlp timed out after 120s')), 120_000)
     ),
