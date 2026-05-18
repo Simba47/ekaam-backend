@@ -323,10 +323,15 @@ const downloadAudio = async (url: string, tmpBase: string): Promise<void> => {
     output: `${tmpBase}.%(ext)s`,
     noPlaylist: true,
     noCheckCertificate: true,
-    extractorArgs: 'youtube:player_client=ios',
   }
 
-  if (cookiesFile) opts['cookies'] = cookiesFile
+  if (cookiesFile) {
+    opts['cookies'] = cookiesFile
+    // web_creator (YouTube Studio) supports cookies and has audio streams; ios client skips cookies entirely
+    opts['extractorArgs'] = 'youtube:player_client=web_creator,web'
+  } else {
+    opts['extractorArgs'] = 'youtube:player_client=tv_embedded,web'
+  }
 
   await Promise.race([
     ytDlpExec(url, opts as any),
@@ -345,7 +350,7 @@ export const downloadAndTranscribe = async (
   const audioPath = `${tmpBase}.mp3`
 
   try {
-    logger.info('Downloading audio via yt-dlp (tv_embedded client)', { url })
+    logger.info('Downloading audio via yt-dlp', { url, hasCookies: !!env.YOUTUBE_COOKIES })
     await downloadAudio(url, tmpBase)
 
     if (!fs.existsSync(audioPath)) {
