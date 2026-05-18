@@ -321,17 +321,18 @@ const downloadAudio = async (url: string, tmpBase: string): Promise<void> => {
     extractAudio: true,
     audioFormat: 'mp3',
     audioQuality: 0,
-    // format 18 = MP4 360p combined stream, always available on tv_embedded client
-    format: '18/best',
     output: `${tmpBase}.%(ext)s`,
     noPlaylist: true,
     quiet: true,
     noWarnings: true,
     noCheckCertificate: true,
-    extractorArgs: 'youtube:player_client=tv_embedded',
   }
 
-  if (cookiesFile) opts['cookies'] = cookiesFile
+  if (cookiesFile) {
+    opts['cookies'] = cookiesFile
+  } else {
+    opts['extractorArgs'] = 'youtube:player_client=tv_embedded,web'
+  }
 
   await Promise.race([
     ytDlpExec(url, opts as any),
