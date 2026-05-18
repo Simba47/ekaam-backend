@@ -303,48 +303,23 @@ export const polishWithSarvam = async (
   }
 }
 
-const buildApifyProxyUrl = (): string | undefined => {
-  const password = env.APIFY_PROXY_PASSWORD ?? env.APIFY_API_TOKEN
-  if (!password) return undefined
-  return `http://auto:${password}@proxy.apify.com:8000`
-}
-
 const downloadAudio = async (url: string, tmpBase: string): Promise<void> => {
-  const ytdlpOpts: Record<string, unknown> = {
-    extractAudio: true,
-    audioFormat: 'mp3',
-    audioQuality: 5,
-    output: `${tmpBase}.%(ext)s`,
-    noPlaylist: true,
-    quiet: true,
-    noWarnings: true,
-    noCheckCertificate: true,
-  }
-
-  const apifyProxy = buildApifyProxyUrl()
-
-  // Primary: yt-dlp via Apify residential proxy (bypasses YouTube bot detection)
-  if (apifyProxy) {
-    try {
-      logger.info('Downloading audio via Apify proxy + yt-dlp', { url })
-      await Promise.race([
-        ytDlpExec(url, { ...ytdlpOpts, proxy: apifyProxy }),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('yt-dlp+Apify timed out after 120s')), 120_000)
-        ),
-      ])
-      logger.info('Audio downloaded via Apify proxy', { url })
-      return
-    } catch (err) {
-      logger.warn('yt-dlp via Apify proxy failed, trying direct', { error: (err as Error).message })
-    }
-  }
-
-  // Fallback: direct yt-dlp
+  // tv_embedded + web player clients bypass YouTube bot detection without cookies or proxy
   await Promise.race([
-    ytDlpExec(url, ytdlpOpts),
+    ytDlpExec(url, {
+      extractAudio: true,
+      audioFormat: 'mp3',
+      audioQuality: 5,
+      output: `${tmpBase}.%(ext)s`,
+      noPlaylist: true,
+      quiet: true,
+      noWarnings: true,
+      noCheckCertificate: true,
+      extractorArgs: 'youtube:player_client=tv_embedded,web',
+      sleepInterval: 2,
+    }),
     new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('yt-dlp direct timed out after 90s')), 90_000)
+      setTimeout(() => reject(new Error('yt-dlp timed out after 120s')), 120_000)
     ),
   ])
 }
@@ -358,7 +333,7 @@ export const downloadAndTranscribe = async (
   const audioPath = `${tmpBase}.mp3`
 
   try {
-    logger.info('Downloading audio via Apify proxy + yt-dlp', { url })
+    logger.info('Downloading audio via yt-dlp (tv_embedded client)', { url })
     await downloadAudio(url, tmpBase)
 
     if (!fs.existsSync(audioPath)) {
