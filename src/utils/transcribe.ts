@@ -352,15 +352,27 @@ const downloadAudio = async (url: string, tmpBase: string): Promise<void> => {
     logger.warn('yt-dlp tv_embedded failed', { error: logErr(err2) })
   }
 
-  // Attempt 3: fresh cookies with default client selection
+  // Attempt 3: Apify residential proxy — bypasses datacenter IP blocks
+  if (env.APIFY_PROXY_PASSWORD) {
+    const apifyProxy = `http://groups-RESIDENTIAL,country-IN:${env.APIFY_PROXY_PASSWORD}@proxy.apify.com:8000`
+    try {
+      logger.info('yt-dlp attempt 3: Apify residential proxy', { url })
+      await runYtDlp(url, { ...baseOpts, proxy: apifyProxy, extractorArgs: 'youtube:player_client=web' } as any)
+      return
+    } catch (err3) {
+      logger.warn('yt-dlp Apify proxy failed', { error: logErr(err3) })
+    }
+  }
+
+  // Attempt 4: cookies with default client selection
   const cookiesFile = writeCookiesFile()
   if (cookiesFile) {
     try {
-      logger.info('yt-dlp attempt 3: default client with cookies', { url })
+      logger.info('yt-dlp attempt 4: default client with cookies', { url })
       await runYtDlp(url, { ...baseOpts, cookies: cookiesFile } as any)
       return
-    } catch (err3) {
-      logger.warn('yt-dlp default+cookies failed', { error: logErr(err3) })
+    } catch (err4) {
+      logger.warn('yt-dlp default+cookies failed', { error: logErr(err4) })
     }
   }
 
