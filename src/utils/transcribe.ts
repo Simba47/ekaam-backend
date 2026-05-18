@@ -13,6 +13,20 @@ const CHUNK_DURATION_SECONDS = 25  // Sarvam starter plan limit is 30s — 25s +
 const OVERLAP_SECONDS = 5
 const CHUNK_DELAY_MS = 6000
 
+// Global semaphore — Sarvam starter plan allows only 1 concurrent request
+let sarvamLock = false
+const sarvamQueue: Array<() => void> = []
+const acquireSarvam = (): Promise<void> =>
+  new Promise(resolve => {
+    if (!sarvamLock) { sarvamLock = true; resolve() }
+    else sarvamQueue.push(resolve)
+  })
+const releaseSarvam = () => {
+  const next = sarvamQueue.shift()
+  if (next) next()
+  else sarvamLock = false
+}
+
 export interface TranscribeResult {
   transcript: string | null
   confidence: 'high' | 'low'
@@ -155,16 +169,21 @@ const transcribeWithSarvam = async (
           form.append('model', 'saaras:v3')
           form.append('with_timestamps', 'false')
 
-          const response = await axios.post(
-            'https://api.sarvam.ai/speech-to-text',
-            form,
-            {
-              headers: { ...form.getHeaders(), 'api-subscription-key': env.SARVAM_API_KEY },
-              timeout: 120000,
-            }
-          )
-          const text: string = response.data?.transcript || response.data?.text || ''
-          if (text.trim()) chunkTranscripts.push(text.trim())
+          await acquireSarvam()
+          try {
+            const response = await axios.post(
+              'https://api.sarvam.ai/speech-to-text',
+              form,
+              {
+                headers: { ...form.getHeaders(), 'api-subscription-key': env.SARVAM_API_KEY },
+                timeout: 120000,
+              }
+            )
+            const text: string = response.data?.transcript || response.data?.text || ''
+            if (text.trim()) chunkTranscripts.push(text.trim())
+          } finally {
+            releaseSarvam()
+          }
         } catch (chunkErr: unknown) {
           const err = chunkErr as { message?: string; response?: { status?: number; data?: unknown } }
           logger.warn(`Sarvam chunk ${chunkIndex + 1} failed`, {
